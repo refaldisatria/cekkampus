@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  STAFF
+}
+
+enum RoomStatus {
+  AVAILABLE
+  MAINTENANCE
+}
+
+enum BookingStatus {
+  PENDING
+  CHECKED_IN
+  CANCELLED
+  COMPLETED
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  role      Role      @default(STUDENT)
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+}
+
+model Building {
+  id    String @id @default(cuid())
+  name  String @unique
+  rooms Room[]
+}
+
+model Room {
+  id         String     @id @default(cuid())
+  name       String
+  buildingId String
+  building   Building   @relation(fields: [buildingId], references: [id])
+  capacity   Int
+  status     RoomStatus @default(AVAILABLE)
+  bookings   Booking[]
+
+  @@index([buildingId])
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  roomId        String
+  room          Room          @relation(fields: [roomId], references: [id])
+  startTime     DateTime
+  endTime       DateTime
+  status        BookingStatus @default(PENDING)
+  qrCodeToken   String        @unique
+  isManualBlock Boolean       @default(false)
+  note          String?
+  createdAt     DateTime      @default(now())
+
+  @@index([roomId, startTime, endTime])
+  @@index([status, startTime])
+}
