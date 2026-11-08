@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Use "postgresql" in production (see .env.example).
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String    @id @default(cuid())
+  campusId String    @unique // NIM / NIDN / staff code
+  name     String
+  email    String    @unique
+  role     String    @default("STUDENT") // STUDENT | LECTURER | STAFF (set by admin, never by the client)
+  passwordHash String? // bcrypt hash; null = Google/Microsoft login only
+  active   Boolean   @default(true)
+  bookings Booking[]
+}
+
+model Room {
+  id         String    @id @default(cuid())
+  name       String    @unique
+  building   String
+  floor      Int
+  capacity   Int
+  facilities String // comma separated: ac,pj,wb,pw,tv (SQLite has no arrays)
+  qrToken    String    @unique @default(cuid()) // held by the door reader
+  closed     Boolean   @default(false)
+  closedNote String?
+  bookings   Booking[]
+}
+
+model Booking {
+  id          String    @id @default(cuid())
+  userId      String
+  roomId      String
+  startTime   DateTime
+  endTime     DateTime
+  status      String    @default("ACTIVE") // ACTIVE | CHECKED_IN | RELEASED | CANCELLED
+  source      String    @default("STUDENT") // STUDENT | STAFF
+  note        String?
+  checkedInAt DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+  room        Room      @relation(fields: [roomId], references: [id])
+
+  @@index([roomId, startTime])
+  @@index([userId, startTime])
+}
