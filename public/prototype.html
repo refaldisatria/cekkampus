@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StudyNook – Keluhan Fasilitas</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased">
+<div id="app"></div><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const CAT={AC:"AC",PROYEKTOR:"Proyektor",WHITEBOARD:"Whiteboard",LISTRIK:"Listrik / Colokan",TV:"TV",KEBERSIHAN:"Kebersihan",LAINNYA:"Lainnya"};
+const ST={BARU:["Baru","bg-amber-100 text-amber-800"],DIPROSES:["Diproses","bg-blue-100 text-blue-800"],SELESAI:["Selesai","bg-emerald-100 text-emerald-800"],DITOLAK:["Ditolak","bg-slate-200 text-slate-700"]};
+const NEXT={BARU:["DIPROSES","SELESAI","DITOLAK"],DIPROSES:["SELESAI","DITOLAK"],SELESAI:[],DITOLAK:[]};
+const LOK=["Nook Alpha 204","Lab Studio 108","Kwalab Hub 312","Focus Pod 402","Tekno Pod 214","Collab Space 301","Ruang Diskusi 202","Study Nook Silent 105","Meeting Room 401","Innovation Lab 310","Toilet Lt. 1","Toilet Lt. 2","Lobi & Koridor"];
+let S={view:"login",role:"mhs",user:null,filter:"",c:[]};
+try{S.c=JSON.parse(localStorage.getItem("sn_keluhan")||"[]")}catch(e){}
+const save=()=>{try{localStorage.setItem("sn_keluhan",JSON.stringify(S.c))}catch(e){}};
+const toast=m=>{$("#toast").innerHTML=`<div class="fixed left-1/2 -translate-x-1/2 bottom-6 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-xl max-w-[90vw]">${esc(m)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>$("#toast").innerHTML="",2800)};
+const badge=s=>`<span class="px-2.5 py-0.5 rounded-full text-xs font-semibold ${ST[s][1]}">${ST[s][0]}</span>`;
+const fmt=t=>new Date(t).toLocaleString("id-ID",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+const card="bg-white rounded-xl shadow-sm p-5",btn="px-4 py-2.5 rounded-lg bg-blue-900 text-white font-semibold hover:opacity-90",inp="w-full bg-slate-100 rounded-lg px-3 py-2.5";
+
+function login(){const stf=S.role=="stf";
+return`<main class="min-h-screen flex items-center justify-center p-4"><div class="${card} w-full max-w-md flex flex-col gap-4">
+<div><div class="text-xs text-slate-500">Layanan Fasilitas Kampus</div><h1 class="text-2xl font-bold text-blue-900">StudyNook</h1><p class="text-slate-600 text-sm mt-1">Laporkan fasilitas yang rusak atau bermasalah. Staf akan menindaklanjuti.</p></div>
+<div class="flex gap-1 bg-slate-100 p-1 rounded-lg text-sm font-semibold">${[["mhs","Mahasiswa"],["dsn","Dosen"],["stf","Staf"]].map(r=>`<button data-a="role" data-v="${r[0]}" class="flex-1 py-2 rounded ${S.role==r[0]?"bg-white text-blue-900 shadow-sm":"text-slate-500"}">${r[1]}</button>`).join("")}</div>
+<label class="text-xs uppercase tracking-wider text-slate-500">${stf?"Kode Staf":S.role=="dsn"?"NIP / NIDN":"NIM"}<input id="nim" class="${inp} mt-1 normal-case text-base" placeholder="${stf?"STAFF001":S.role=="dsn"?"198001012005011001":"2401234567"}"></label>
+<button data-a="login" class="${btn}">Masuk (simulasi SSO)</button></div></main>`}
+
+function shell(body){const stf=S.role=="stf",it=stf?[["staff","Semua Keluhan"]]:[["lapor","Lapor Keluhan"],["saya","Keluhan Saya"]];
+return`<header class="sticky top-0 bg-white shadow-sm z-10"><div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between"><div class="flex items-center gap-4"><b class="text-blue-900">StudyNook</b><nav class="flex gap-1">${it.map(i=>`<button data-a="go" data-v="${i[0]}" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${S.view==i[0]?"bg-blue-900 text-white":"text-slate-600 hover:bg-slate-100"}">${i[1]}</button>`).join("")}</nav></div><div class="flex items-center gap-3 text-sm"><span class="hidden sm:block text-slate-600">${esc(S.user.name)}</span><button data-a="logout" class="text-slate-500 hover:text-red-700">Keluar</button></div></div></header><main class="max-w-4xl mx-auto px-4 py-6">${body}</main>`}
+
+function lapor(){return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-1">Lapor Keluhan Fasilitas</h1><p class="text-slate-600 text-sm mb-4">Ceritakan masalahnya sejelas mungkin supaya cepat ditangani.</p>
+<div class="${card} flex flex-col gap-4">
+<label class="text-sm font-semibold">Lokasi<select id="f-room" class="${inp} mt-1 font-normal">${LOK.map(l=>`<option>${esc(l)}</option>`).join("")}</select></label>
+<label class="text-sm font-semibold">Kategori<select id="f-cat" class="${inp} mt-1 font-normal">${Object.entries(CAT).map(c=>`<option value="${c[0]}">${c[1]}</option>`).join("")}</select></label>
+<label class="text-sm font-semibold">Deskripsi masalah<textarea id="f-desc" rows="4" maxlength="1000" class="${inp} mt-1 font-normal" placeholder="Contoh: AC tidak dingin dan menetes air sejak kemarin."></textarea></label>
+<button data-a="submit" class="${btn}">Kirim Keluhan</button></div>`)}
+
+function saya(){const L=S.c.filter(c=>c.by==S.user.id).sort((a,b)=>b.t-a.t);
+return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-4">Keluhan Saya</h1>${L.length?L.map(c=>`<div class="${card} mb-3"><div class="flex justify-between gap-2 items-start"><div><div class="font-semibold">${esc(c.room)} · ${CAT[c.cat]}</div><div class="text-xs text-slate-500">${fmt(c.t)}</div></div>${badge(c.status)}</div><p class="mt-2 text-sm">${esc(c.desc)}</p>${c.note?`<div class="mt-3 text-sm bg-slate-100 rounded-lg p-3"><b>Catatan staf:</b> ${esc(c.note)}</div>`:""}</div>`).join(""):`<div class="${card} text-center text-slate-600">Belum ada keluhan. <button data-a="go" data-v="lapor" class="text-blue-800 font-semibold underline">Buat laporan</button></div>`}`)}
+
+function staff(){const all=S.c,L=all.filter(c=>!S.filter||c.status==S.filter).sort((a,b)=>b.t-a.t),n=k=>all.filter(c=>c.status==k).length;
+return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-4">Semua Keluhan</h1>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">${Object.keys(ST).map(k=>`<button data-a="filter" data-v="${S.filter==k?"":k}" class="${card} text-left ${S.filter==k?"ring-2 ring-blue-900":""}"><div class="text-xs text-slate-500 uppercase">${ST[k][0]}</div><div class="text-2xl font-bold">${n(k)}</div></button>`).join("")}</div>
+${L.length?L.map(c=>`<div class="${card} mb-3"><div class="flex justify-between gap-2 items-start"><div><div class="font-semibold">${esc(c.room)} · ${CAT[c.cat]}</div><div class="text-xs text-slate-500">${esc(c.byName)} · ${fmt(c.t)}</div></div>${badge(c.status)}</div><p class="mt-2 text-sm">${esc(c.desc)}</p>
+${NEXT[c.status].length?`<div class="mt-3 flex flex-col sm:flex-row gap-2"><input id="n-${c.id}" value="${esc(c.note||"")}" placeholder="Catatan untuk pelapor (opsional)" class="${inp} text-sm">${NEXT[c.status].map(s=>`<button data-a="set" data-id="${c.id}" data-v="${s}" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${ST[s][1]}">${ST[s][0]}</button>`).join("")}</div>`:c.note?`<div class="mt-3 text-sm bg-slate-100 rounded-lg p-3">${esc(c.note)}</div>`:""}</div>`).join(""):`<div class="${card} text-center text-slate-600">Tidak ada keluhan.</div>`}`)}
+
+function render(){$("#app").innerHTML=S.view=="login"?login():({lapor,saya,staff}[S.view])()}
+document.addEventListener("click",e=>{const t=e.target.closest("[data-a]");if(!t)return;const a=t.dataset.a,v=t.dataset.v;
+if(a=="role"){S.role=v;render()}
+else if(a=="login"){const id=$("#nim").value.trim()||(S.role=="stf"?"STAFF001":"2401234567");S.user={id,name:S.role=="stf"?"Bambang S.":S.role=="dsn"?"Dr. Sari Wulandari":"Rafi Pratama"};S.view=S.role=="stf"?"staff":"lapor";render()}
+else if(a=="go"){S.view=v;render()}
+else if(a=="logout"){S.view="login";S.user=null;render()}
+else if(a=="filter"){S.filter=v;render()}
+else if(a=="submit"){const d=$("#f-desc").value.trim();if(d.length<10){toast("Deskripsi minimal 10 karakter.");return}
+const room=$("#f-room").value;if(S.c.filter(c=>c.by==S.user.id&&c.room==room&&(c.status=="BARU"||c.status=="DIPROSES")).length>=3){toast("Keluhan terbuka untuk lokasi ini sudah terlalu banyak.");return}
+S.c.push({id:Date.now(),by:S.user.id,byName:S.user.name,room,cat:$("#f-cat").value,desc:d,status:"BARU",note:"",t:Date.now()});save();toast("Keluhan terkirim.");S.view="saya";render()}
+else if(a=="set"){const c=S.c.find(x=>x.id==t.dataset.id),n=$("#n-"+c.id);c.status=v;if(n)c.note=n.value.trim();save();toast("Status diubah: "+ST[v][0]);render()}});
+render();
+</script>
+</body>
+</html>

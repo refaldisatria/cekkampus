@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Use "postgresql" in production (see .env.example).
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String      @id @default(cuid())
+  campusId   String      @unique // NIM / NIDN / staff code
+  name       String
+  email      String      @unique
+  role       String      @default("STUDENT") // STUDENT | LECTURER | STAFF
+  complaints Complaint[]
+}
+
+// Lokasi fasilitas yang bisa dikeluhkan (ruang kelas, lab, toilet, dll).
+model Room {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  building   String
+  floor      Int
+  complaints Complaint[]
+}
+
+model Complaint {
+  id          String    @id @default(cuid())
+  userId      String
+  roomId      String
+  category    String // AC | PROYEKTOR | WHITEBOARD | LISTRIK | TV | KEBERSIHAN | LAINNYA
+  description String
+  status      String    @default("BARU") // BARU | DIPROSES | SELESAI | DITOLAK
+  staffNote   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  resolvedAt  DateTime?
+  user        User      @relation(fields: [userId], references: [id])
+  room        Room      @relation(fields: [roomId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([roomId, createdAt])
+}
