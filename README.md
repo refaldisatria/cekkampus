@@ -4,7 +4,7 @@ Fokus aplikasi: **mahasiswa/dosen melaporkan fasilitas yang bermasalah, staf men
 Fitur lain (pemesanan ruang, check-in QR, jadwal dosen, dll.) sudah dihapus.
 
 Backend: Next.js 14 App Router + TypeScript + Prisma. Prototipe UI klik-klik: `public/prototype.html`
-(data tersimpan di browser, tanpa server).
+(sekarang memanggil API; butuh server + database).
 
 **Status jujur:** logika server sudah ditulis tetapi belum dijalankan/diuji end-to-end, dan UI React belum
 terhubung ke API.
@@ -36,12 +36,18 @@ Batas anti-spam: maks 3 keluhan terbuka per orang per lokasi.
 |---|---|---|
 | POST | `/api/auth/dummy` | Login simulasi `{campusId, role?}` (cookie `sn_user`, hanya jika `DEMO_LOGIN=true`). Peran STAFF hanya dari database. |
 | GET | `/api/me` | Pengguna saat ini |
+| POST | `/api/auth/logout` | Hapus cookie sesi |
 | GET | `/api/rooms` | Daftar lokasi |
 | GET/POST | `/api/complaints` | Keluhan saya / buat keluhan `{roomId, category, description}` |
 | GET | `/api/staff/complaints?status=&category=&roomId=` | Semua keluhan (staf) |
-| PATCH | `/api/staff/complaints/:id` | Ubah status / catatan `{status?, staffNote?}` (staf) |
+| GET | `/api/complaints/:id` | Detail + linimasa + pesan + foto (pelapor/staf) |
+| POST | `/api/complaints/:id/messages` | Kirim pesan `{body}` |
+| POST | `/api/complaints/:id/cancel` | Pelapor membatalkan (hanya status BARU) |
+| PATCH | `/api/staff/complaints/:id` | Ubah status / catatan / foto hasil `{status?, staffNote?, photoAfter?}` (staf) |
 
-Kategori: AC, PROYEKTOR, WHITEBOARD, LISTRIK, TV, KEBERSIHAN, LAINNYA (lihat `lib/rules.ts`).
+Kategori: AC, LAMPU, PIPA_TOILET, PROYEKTOR, MEJA_KURSI, WIFI, KEBERSIHAN, LAINNYA.
+Urgent (mengganggu kelas): SLA 2 jam; biasa 24 jam. Foto disimpan sebagai data URL terkompres (maks ~500 KB) di database;
+untuk skala besar pindahkan ke object storage. Tidak ada deteksi AI / LiDAR / beacon / barcode aset. (lihat `lib/rules.ts`).
 
 ## Deploy ke Vercel
 

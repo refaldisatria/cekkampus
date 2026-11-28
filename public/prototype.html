@@ -8,59 +8,85 @@
 </head>
 <body class="bg-slate-50 text-slate-900 antialiased">
 <div id="app"></div><div id="toast"></div>
+<input id="fc" type="file" accept="image/*" capture="environment" hidden>
+<input id="fg" type="file" accept="image/*" hidden>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const CAT={AC:"AC",PROYEKTOR:"Proyektor",WHITEBOARD:"Whiteboard",LISTRIK:"Listrik / Colokan",TV:"TV",KEBERSIHAN:"Kebersihan",LAINNYA:"Lainnya"};
-const ST={BARU:["Baru","bg-amber-100 text-amber-800"],DIPROSES:["Diproses","bg-blue-100 text-blue-800"],SELESAI:["Selesai","bg-emerald-100 text-emerald-800"],DITOLAK:["Ditolak","bg-slate-200 text-slate-700"]};
-const NEXT={BARU:["DIPROSES","SELESAI","DITOLAK"],DIPROSES:["SELESAI","DITOLAK"],SELESAI:[],DITOLAK:[]};
-const LOK=["Nook Alpha 204","Lab Studio 108","Kwalab Hub 312","Focus Pod 402","Tekno Pod 214","Collab Space 301","Ruang Diskusi 202","Study Nook Silent 105","Meeting Room 401","Innovation Lab 310","Toilet Lt. 1","Toilet Lt. 2","Lobi & Koridor"];
-let S={view:"login",role:"mhs",user:null,filter:"",c:[]};
-try{S.c=JSON.parse(localStorage.getItem("sn_keluhan")||"[]")}catch(e){}
-const save=()=>{try{localStorage.setItem("sn_keluhan",JSON.stringify(S.c))}catch(e){}};
-const toast=m=>{$("#toast").innerHTML=`<div class="fixed left-1/2 -translate-x-1/2 bottom-6 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-xl max-w-[90vw]">${esc(m)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>$("#toast").innerHTML="",2800)};
+const CAT={AC:["AC Tidak Dingin","❄️"],LAMPU:["Lampu Mati","💡"],PIPA_TOILET:["Pipa / Toilet","🚰"],PROYEKTOR:["Proyektor Buram","📽️"],MEJA_KURSI:["Meja / Kursi","🪑"],WIFI:["Wi-Fi / Jaringan","📶"],KEBERSIHAN:["Kebersihan","🧹"],LAINNYA:["Lainnya","🔧"]};
+const ST={BARU:["Baru","bg-amber-100 text-amber-800"],DIPROSES:["Diproses","bg-blue-100 text-blue-800"],SELESAI:["Selesai","bg-emerald-100 text-emerald-800"],DITOLAK:["Ditolak","bg-slate-200 text-slate-700"],BATAL:["Dibatalkan","bg-slate-200 text-slate-700"]};
+const NEXT={BARU:["DIPROSES","SELESAI","DITOLAK"],DIPROSES:["SELESAI","DITOLAK"]};
+const FINAL=["SELESAI","DITOLAK","BATAL"];
+let S={view:"login",role:"mhs",user:null,rooms:[],list:[],d:null,filter:"",cat:"AC",urgent:false,photo:null,room:"",desc:"",after:null};
+const card="bg-white rounded-xl shadow-sm p-5",btn="px-4 py-2.5 rounded-lg bg-blue-900 text-white font-semibold hover:opacity-90 disabled:opacity-40",inp="w-full bg-slate-100 rounded-lg px-3 py-2.5";
+const toast=m=>{$("#toast").innerHTML=`<div class="fixed left-1/2 -translate-x-1/2 bottom-6 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-xl max-w-[90vw] z-50">${esc(m)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>$("#toast").innerHTML="",3000)};
+async function api(p,o={}){const r=await fetch("/api"+p,{method:o.method||"GET",headers:{"Content-Type":"application/json"},body:o.body?JSON.stringify(o.body):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"Gagal ("+r.status+")");return j}
 const badge=s=>`<span class="px-2.5 py-0.5 rounded-full text-xs font-semibold ${ST[s][1]}">${ST[s][0]}</span>`;
+const urg=c=>c.urgent?`<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white">URGENT</span>`:"";
 const fmt=t=>new Date(t).toLocaleString("id-ID",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
-const card="bg-white rounded-xl shadow-sm p-5",btn="px-4 py-2.5 rounded-lg bg-blue-900 text-white font-semibold hover:opacity-90",inp="w-full bg-slate-100 rounded-lg px-3 py-2.5";
+const ttl=c=>`${CAT[c.category]?.[0]||c.category} — ${esc(c.room.name)}`;
+function slaBox(c){if(!c.dueAt)return"";const t0=+new Date(c.createdAt),t1=+new Date(c.dueAt),done=FINAL.includes(c.status),now=done&&c.resolvedAt?+new Date(c.resolvedAt):Date.now(),pct=Math.min(100,Math.max(0,Math.round((now-t0)/(t1-t0)*100))),late=now>t1,left=Math.max(0,Math.round((t1-now)/6e4));
+const lbl=done?(late?"Selesai terlambat":"Selesai tepat waktu"):late?"Melewati batas SLA":"On schedule";
+return`<div><div class="flex justify-between text-sm"><b>SLA (${c.urgent?"2 jam":"24 jam"})</b><span class="${late?"text-red-600":"text-emerald-700"} font-semibold">${lbl}</span></div><div class="h-2 bg-slate-200 rounded-full mt-2 overflow-hidden"><div class="h-full ${late?"bg-red-500":"bg-blue-900"}" style="width:${pct}%"></div></div><div class="text-xs text-slate-500 mt-1">${done?"":`Sisa ${left} menit · `}batas ${fmt(c.dueAt)}</div></div>`}
 
-function login(){const stf=S.role=="stf";
-return`<main class="min-h-screen flex items-center justify-center p-4"><div class="${card} w-full max-w-md flex flex-col gap-4">
-<div><div class="text-xs text-slate-500">Layanan Fasilitas Kampus</div><h1 class="text-2xl font-bold text-blue-900">StudyNook</h1><p class="text-slate-600 text-sm mt-1">Laporkan fasilitas yang rusak atau bermasalah. Staf akan menindaklanjuti.</p></div>
+function shell(body){const stf=S.user.role=="STAFF",it=stf?[["staff","Semua Keluhan"]]:[["lapor","Lapor"],["saya","Keluhan Saya"]],on=S.view=="detail"?(stf?"staff":"saya"):S.view;
+return`<header class="sticky top-0 bg-white shadow-sm z-10"><div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between"><div class="flex items-center gap-4"><b class="text-blue-900">StudyNook</b><nav class="flex gap-1">${it.map(i=>`<button data-a="go" data-v="${i[0]}" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${on==i[0]?"bg-blue-900 text-white":"text-slate-600 hover:bg-slate-100"}">${i[1]}</button>`).join("")}</nav></div><div class="flex items-center gap-3 text-sm"><span class="hidden sm:block text-slate-600">${esc(S.user.name)}</span><button data-a="logout" class="text-slate-500 hover:text-red-700">Keluar</button></div></div></header><main class="max-w-4xl mx-auto px-4 py-6">${body}</main>`}
+
+function login(){return`<main class="min-h-screen flex items-center justify-center p-4"><div class="${card} w-full max-w-md flex flex-col gap-4"><div><div class="text-xs text-slate-500">Layanan Fasilitas Kampus</div><h1 class="text-2xl font-bold text-blue-900">StudyNook</h1><p class="text-slate-600 text-sm mt-1">Laporkan fasilitas yang rusak, pantau penanganannya.</p></div>
 <div class="flex gap-1 bg-slate-100 p-1 rounded-lg text-sm font-semibold">${[["mhs","Mahasiswa"],["dsn","Dosen"],["stf","Staf"]].map(r=>`<button data-a="role" data-v="${r[0]}" class="flex-1 py-2 rounded ${S.role==r[0]?"bg-white text-blue-900 shadow-sm":"text-slate-500"}">${r[1]}</button>`).join("")}</div>
-<label class="text-xs uppercase tracking-wider text-slate-500">${stf?"Kode Staf":S.role=="dsn"?"NIP / NIDN":"NIM"}<input id="nim" class="${inp} mt-1 normal-case text-base" placeholder="${stf?"STAFF001":S.role=="dsn"?"198001012005011001":"2401234567"}"></label>
+<label class="text-xs uppercase tracking-wider text-slate-500">${S.role=="stf"?"Kode Staf":S.role=="dsn"?"NIP / NIDN":"NIM"}<input id="nim" class="${inp} mt-1 normal-case text-base" placeholder="${S.role=="stf"?"STAFF001":S.role=="dsn"?"198001012005011001":"2401234567"}"></label>
 <button data-a="login" class="${btn}">Masuk (simulasi SSO)</button></div></main>`}
 
-function shell(body){const stf=S.role=="stf",it=stf?[["staff","Semua Keluhan"]]:[["lapor","Lapor Keluhan"],["saya","Keluhan Saya"]];
-return`<header class="sticky top-0 bg-white shadow-sm z-10"><div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between"><div class="flex items-center gap-4"><b class="text-blue-900">StudyNook</b><nav class="flex gap-1">${it.map(i=>`<button data-a="go" data-v="${i[0]}" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${S.view==i[0]?"bg-blue-900 text-white":"text-slate-600 hover:bg-slate-100"}">${i[1]}</button>`).join("")}</nav></div><div class="flex items-center gap-3 text-sm"><span class="hidden sm:block text-slate-600">${esc(S.user.name)}</span><button data-a="logout" class="text-slate-500 hover:text-red-700">Keluar</button></div></div></header><main class="max-w-4xl mx-auto px-4 py-6">${body}</main>`}
+function lapor(){return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-4">Lapor Fasilitas</h1><div class="grid md:grid-cols-2 gap-4">
+<div class="${card} flex flex-col gap-3"><b>Foto kerusakan</b>${S.photo?`<img src="${S.photo}" class="rounded-lg w-full max-h-64 object-cover">`:`<div class="rounded-lg bg-slate-100 h-40 flex items-center justify-center text-slate-500 text-sm">Belum ada foto</div>`}
+<div class="flex gap-2"><button data-a="cam" class="${btn} flex-1">📷 Kamera</button><button data-a="gal" class="flex-1 px-4 py-2.5 rounded-lg bg-slate-100 font-semibold">🖼️ Galeri</button>${S.photo?`<button data-a="nophoto" class="px-3 rounded-lg bg-red-50 text-red-700">Hapus</button>`:""}</div><p class="text-xs text-slate-500">Pastikan unit yang rusak tampak jelas. Foto otomatis dikompres.</p></div>
+<div class="flex flex-col gap-4"><div class="${card} flex flex-col gap-3"><label class="text-sm font-semibold">Lokasi<select id="f-room" class="${inp} mt-1 font-normal">${S.rooms.map(r=>`<option value="${r.id}" ${S.room==r.id?"selected":""}>${esc(r.name)}</option>`).join("")}</select></label>
+<div><div class="text-sm font-semibold mb-1">Kategori</div><div class="grid grid-cols-2 gap-2">${Object.entries(CAT).map(c=>`<button data-a="cat" data-v="${c[0]}" class="text-left px-3 py-2 rounded-lg text-sm ${S.cat==c[0]?"bg-blue-900 text-white":"bg-slate-100"}">${c[1][1]} ${c[1][0]}</button>`).join("")}</div></div>
+<label class="text-sm font-semibold">Keterangan<textarea id="f-desc" rows="3" maxlength="500" class="${inp} mt-1 font-normal" placeholder="Contoh: AC menetes ke meja depan sejak pagi.">${esc(S.desc)}</textarea></label></div>
+<div class="${card} flex items-center justify-between gap-3 ${S.urgent?"ring-2 ring-red-500":""}"><div><b>Tingkat kritis kelas</b> <span class="text-xs font-bold bg-red-600 text-white px-2 py-0.5 rounded-full">URGENT</span><p class="text-sm text-slate-600">Mengganggu perkuliahan / ujian yang sedang berlangsung? Target penanganan 2 jam (biasa: 24 jam).</p></div><button data-a="urg" class="w-12 h-7 rounded-full shrink-0 ${S.urgent?"bg-red-600":"bg-slate-300"} relative"><span class="absolute top-0.5 ${S.urgent?"right-0.5":"left-0.5"} w-6 h-6 bg-white rounded-full"></span></button></div>
+<button data-a="submit" class="${btn} py-3">Kirim Laporan</button></div></div>`)}
 
-function lapor(){return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-1">Lapor Keluhan Fasilitas</h1><p class="text-slate-600 text-sm mb-4">Ceritakan masalahnya sejelas mungkin supaya cepat ditangani.</p>
-<div class="${card} flex flex-col gap-4">
-<label class="text-sm font-semibold">Lokasi<select id="f-room" class="${inp} mt-1 font-normal">${LOK.map(l=>`<option>${esc(l)}</option>`).join("")}</select></label>
-<label class="text-sm font-semibold">Kategori<select id="f-cat" class="${inp} mt-1 font-normal">${Object.entries(CAT).map(c=>`<option value="${c[0]}">${c[1]}</option>`).join("")}</select></label>
-<label class="text-sm font-semibold">Deskripsi masalah<textarea id="f-desc" rows="4" maxlength="1000" class="${inp} mt-1 font-normal" placeholder="Contoh: AC tidak dingin dan menetes air sejak kemarin."></textarea></label>
-<button data-a="submit" class="${btn}">Kirim Keluhan</button></div>`)}
+function saya(){return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-4">Keluhan Saya</h1>${S.list.length?S.list.map(row).join(""):`<div class="${card} text-center text-slate-600">Belum ada keluhan. <button data-a="go" data-v="lapor" class="text-blue-800 font-semibold underline">Buat laporan</button></div>`}`)}
+const row=c=>`<button data-a="open" data-v="${c.id}" class="${card} mb-3 w-full text-left block hover:shadow-md"><div class="flex justify-between gap-2 items-start"><div><div class="font-semibold">${ttl(c)}</div><div class="text-xs text-slate-500">${c.user?esc(c.user.name)+" · ":""}${fmt(c.createdAt)}</div></div><div class="flex gap-1">${urg(c)}${badge(c.status)}</div></div><p class="mt-2 text-sm line-clamp-2">${esc(c.description)}</p></button>`;
+function staff(){const n=k=>S.list.filter(c=>c.status==k).length,L=S.list.filter(c=>!S.filter||c.status==S.filter);
+return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-4">Semua Keluhan</h1><div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">${["BARU","DIPROSES","SELESAI","DITOLAK","BATAL"].map(k=>`<button data-a="filter" data-v="${S.filter==k?"":k}" class="${card} text-left ${S.filter==k?"ring-2 ring-blue-900":""}"><div class="text-xs text-slate-500 uppercase">${ST[k][0]}</div><div class="text-2xl font-bold">${n(k)}</div></button>`).join("")}</div>${L.length?L.map(row).join(""):`<div class="${card} text-center text-slate-600">Tidak ada keluhan.</div>`}`)}
 
-function saya(){const L=S.c.filter(c=>c.by==S.user.id).sort((a,b)=>b.t-a.t);
-return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-4">Keluhan Saya</h1>${L.length?L.map(c=>`<div class="${card} mb-3"><div class="flex justify-between gap-2 items-start"><div><div class="font-semibold">${esc(c.room)} · ${CAT[c.cat]}</div><div class="text-xs text-slate-500">${fmt(c.t)}</div></div>${badge(c.status)}</div><p class="mt-2 text-sm">${esc(c.desc)}</p>${c.note?`<div class="mt-3 text-sm bg-slate-100 rounded-lg p-3"><b>Catatan staf:</b> ${esc(c.note)}</div>`:""}</div>`).join(""):`<div class="${card} text-center text-slate-600">Belum ada keluhan. <button data-a="go" data-v="lapor" class="text-blue-800 font-semibold underline">Buat laporan</button></div>`}`)}
+function detail(){const c=S.d,stf=S.user.role=="STAFF",dot={DITERIMA:"bg-blue-900",DIPROSES:"bg-amber-500",SELESAI:"bg-emerald-600",DITOLAK:"bg-slate-500",BATAL:"bg-slate-500",CATATAN:"bg-blue-400"};
+return shell(`<button data-a="go" data-v="${stf?"staff":"saya"}" class="text-sm text-slate-600 mb-3">← Kembali</button>
+<div class="${card} mb-4 ${c.urgent?"border-l-4 border-red-500":""}"><div class="flex flex-wrap justify-between gap-3"><div><div class="text-xs text-slate-500">Tiket #${esc(c.id.slice(-6).toUpperCase())}</div><h1 class="text-xl font-bold">${ttl(c)}</h1><div class="text-sm text-slate-600 mt-1">${stf?esc(c.user.name)+" ("+esc(c.user.campusId)+") · ":""}${fmt(c.createdAt)}</div></div><div class="flex gap-1 items-start">${urg(c)}${badge(c.status)}</div></div><p class="mt-3 text-sm">${esc(c.description)}</p><div class="mt-4">${slaBox(c)}</div></div>
+<div class="grid md:grid-cols-2 gap-4"><div class="${card}"><b>Progres</b><div class="mt-3">${c.events.map((e,i)=>`<div class="flex gap-3 pb-4"><div class="flex flex-col items-center"><span class="w-3 h-3 rounded-full mt-1 ${dot[e.type]||"bg-slate-400"}"></span>${i<c.events.length-1?`<span class="flex-1 w-px bg-slate-300"></span>`:""}</div><div><div class="text-sm">${esc(e.text)}</div><div class="text-xs text-slate-500">${fmt(e.createdAt)}</div></div></div>`).join("")}</div></div>
+<div class="${card}"><b>Dokumentasi</b><div class="grid grid-cols-2 gap-2 mt-3">${[["Sebelum",c.photoBefore],["Sesudah",c.photoAfter]].map(p=>`<div>${p[1]?`<img src="${p[1]}" class="rounded-lg w-full h-32 object-cover">`:`<div class="rounded-lg bg-slate-100 h-32 flex items-center justify-center text-xs text-slate-400">Belum ada</div>`}<div class="text-xs text-slate-500 mt-1">${p[0]}</div></div>`).join("")}</div>
+${stf&&!FINAL.includes(c.status)?`<div class="mt-3 flex gap-2"><button data-a="afterpick" class="px-3 py-2 rounded-lg bg-slate-100 text-sm font-semibold">📷 Foto hasil perbaikan</button>${S.after?`<img src="${S.after}" class="h-10 rounded"><button data-a="afterup" class="${btn} text-sm">Unggah</button>`:""}</div>`:""}</div></div>
+${stf&&NEXT[c.status]?`<div class="${card} mt-4"><b>Tindak lanjut staf</b><div class="mt-2 flex flex-col sm:flex-row gap-2"><input id="note" placeholder="Catatan untuk pelapor (opsional)" class="${inp} text-sm">${NEXT[c.status].map(s=>`<button data-a="set" data-v="${s}" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${ST[s][1]}">${ST[s][0]}</button>`).join("")}</div></div>`:""}
+<div class="${card} mt-4"><b>Pesan</b><div class="mt-3 flex flex-col gap-2 max-h-72 overflow-y-auto">${c.messages.length?c.messages.map(m=>`<div class="rounded-lg p-3 text-sm ${m.user.role=="STAFF"?"bg-blue-50":"bg-slate-100"}"><div class="text-xs text-slate-500 mb-0.5"><b>${esc(m.user.name)}</b>${m.user.role=="STAFF"?" · Staf":""} · ${fmt(m.createdAt)}</div>${esc(m.body)}</div>`).join(""):`<div class="text-sm text-slate-500">Belum ada pesan.</div>`}</div>
+<div class="mt-3 flex gap-2"><input id="msg" maxlength="500" placeholder="Kirim pesan atau info tambahan…" class="${inp} text-sm"><button data-a="send" class="${btn}">Kirim</button></div></div>
+${!stf&&c.status=="BARU"?`<button data-a="cancel" class="mt-4 w-full py-2.5 rounded-lg bg-red-50 text-red-700 font-semibold">Batalkan laporan</button>`:""}`)}
 
-function staff(){const all=S.c,L=all.filter(c=>!S.filter||c.status==S.filter).sort((a,b)=>b.t-a.t),n=k=>all.filter(c=>c.status==k).length;
-return shell(`<h1 class="text-2xl font-bold text-blue-900 mb-4">Semua Keluhan</h1>
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">${Object.keys(ST).map(k=>`<button data-a="filter" data-v="${S.filter==k?"":k}" class="${card} text-left ${S.filter==k?"ring-2 ring-blue-900":""}"><div class="text-xs text-slate-500 uppercase">${ST[k][0]}</div><div class="text-2xl font-bold">${n(k)}</div></button>`).join("")}</div>
-${L.length?L.map(c=>`<div class="${card} mb-3"><div class="flex justify-between gap-2 items-start"><div><div class="font-semibold">${esc(c.room)} · ${CAT[c.cat]}</div><div class="text-xs text-slate-500">${esc(c.byName)} · ${fmt(c.t)}</div></div>${badge(c.status)}</div><p class="mt-2 text-sm">${esc(c.desc)}</p>
-${NEXT[c.status].length?`<div class="mt-3 flex flex-col sm:flex-row gap-2"><input id="n-${c.id}" value="${esc(c.note||"")}" placeholder="Catatan untuk pelapor (opsional)" class="${inp} text-sm">${NEXT[c.status].map(s=>`<button data-a="set" data-id="${c.id}" data-v="${s}" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${ST[s][1]}">${ST[s][0]}</button>`).join("")}</div>`:c.note?`<div class="mt-3 text-sm bg-slate-100 rounded-lg p-3">${esc(c.note)}</div>`:""}</div>`).join(""):`<div class="${card} text-center text-slate-600">Tidak ada keluhan.</div>`}`)}
-
-function render(){$("#app").innerHTML=S.view=="login"?login():({lapor,saya,staff}[S.view])()}
-document.addEventListener("click",e=>{const t=e.target.closest("[data-a]");if(!t)return;const a=t.dataset.a,v=t.dataset.v;
-if(a=="role"){S.role=v;render()}
-else if(a=="login"){const id=$("#nim").value.trim()||(S.role=="stf"?"STAFF001":"2401234567");S.user={id,name:S.role=="stf"?"Bambang S.":S.role=="dsn"?"Dr. Sari Wulandari":"Rafi Pratama"};S.view=S.role=="stf"?"staff":"lapor";render()}
-else if(a=="go"){S.view=v;render()}
-else if(a=="logout"){S.view="login";S.user=null;render()}
-else if(a=="filter"){S.filter=v;render()}
-else if(a=="submit"){const d=$("#f-desc").value.trim();if(d.length<10){toast("Deskripsi minimal 10 karakter.");return}
-const room=$("#f-room").value;if(S.c.filter(c=>c.by==S.user.id&&c.room==room&&(c.status=="BARU"||c.status=="DIPROSES")).length>=3){toast("Keluhan terbuka untuk lokasi ini sudah terlalu banyak.");return}
-S.c.push({id:Date.now(),by:S.user.id,byName:S.user.name,room,cat:$("#f-cat").value,desc:d,status:"BARU",note:"",t:Date.now()});save();toast("Keluhan terkirim.");S.view="saya";render()}
-else if(a=="set"){const c=S.c.find(x=>x.id==t.dataset.id),n=$("#n-"+c.id);c.status=v;if(n)c.note=n.value.trim();save();toast("Status diubah: "+ST[v][0]);render()}});
-render();
+function render(){const a=$("#app");a.innerHTML=S.view=="login"||!S.user?login():({lapor,saya,staff,detail}[S.view])()}
+async function go(v,id){try{if(v=="lapor"){if(!S.rooms.length)S.rooms=await api("/rooms");S.room=S.room||S.rooms[0]?.id}
+else if(v=="saya")S.list=await api("/complaints");else if(v=="staff")S.list=await api("/staff/complaints");else if(v=="detail")S.d=await api("/complaints/"+id);
+S.view=v;render();scrollTo(0,0)}catch(e){toast(e.message)}}
+async function start(u){S.user=u;await go(u.role=="STAFF"?"staff":"lapor")}
+function pick(f,cb){if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);const d=c.toDataURL("image/jpeg",.6);d.length>7e5?toast("Foto terlalu besar."):cb(d)};im.src=r.result};r.readAsDataURL(f)}
+const keep=()=>{const r=$("#f-room"),d=$("#f-desc");if(r)S.room=r.value;if(d)S.desc=d.value};
+let target="photo";
+document.addEventListener("change",e=>{if(e.target.id=="fc"||e.target.id=="fg"){pick(e.target.files[0],d=>{S[target]=d;render()});e.target.value=""}});
+document.addEventListener("click",async e=>{const t=e.target.closest("[data-a]");if(!t)return;const a=t.dataset.a,v=t.dataset.v;
+try{if(a=="role"){S.role=v;render()}
+else if(a=="login"){const id=$("#nim").value.trim()||(S.role=="stf"?"STAFF001":"2401234567"),u=await api("/auth/dummy",{method:"POST",body:{campusId:id,role:S.role=="dsn"?"LECTURER":"STUDENT"}});if(S.role=="stf"&&u.role!="STAFF"){toast("Kode ini bukan akun staf.");return}await start(u)}
+else if(a=="go"){keep();go(v)}else if(a=="open")go("detail",v)
+else if(a=="logout"){await api("/auth/logout",{method:"POST"}).catch(()=>{});S.user=null;S.view="login";render()}
+else if(a=="filter"){S.filter=v;render()}else if(a=="cat"){keep();S.cat=v;render()}else if(a=="urg"){keep();S.urgent=!S.urgent;render()}
+else if(a=="cam"){keep();target="photo";$("#fc").click()}else if(a=="gal"){keep();target="photo";$("#fg").click()}else if(a=="nophoto"){keep();S.photo=null;render()}
+else if(a=="afterpick"){target="after";$("#fg").click()}
+else if(a=="submit"){keep();await api("/complaints",{method:"POST",body:{roomId:S.room,category:S.cat,description:S.desc,urgent:S.urgent,photo:S.photo}});S.photo=null;S.desc="";S.urgent=false;toast("Laporan terkirim.");go("saya")}
+else if(a=="send"){const m=$("#msg").value.trim();if(!m)return;await api(`/complaints/${S.d.id}/messages`,{method:"POST",body:{body:m}});go("detail",S.d.id)}
+else if(a=="cancel"){if(!confirm("Batalkan laporan ini?"))return;await api(`/complaints/${S.d.id}/cancel`,{method:"POST"});go("detail",S.d.id)}
+else if(a=="set"){await api("/staff/complaints/"+S.d.id,{method:"PATCH",body:{status:v,staffNote:$("#note").value}});toast("Status diubah.");go("detail",S.d.id)}
+else if(a=="afterup"){await api("/staff/complaints/"+S.d.id,{method:"PATCH",body:{photoAfter:S.after}});S.after=null;go("detail",S.d.id)}}
+catch(x){toast(x.message)}});
+setInterval(async()=>{if(S.view=="detail"&&S.d&&!/INPUT|TEXTAREA/.test(document.activeElement.tagName)){try{S.d=await api("/complaints/"+S.d.id);render()}catch(e){}}},20000);
+api("/me").then(start).catch(()=>render());
 </script>
 </body>
 </html>
